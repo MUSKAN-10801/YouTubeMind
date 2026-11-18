@@ -1,11 +1,14 @@
-<CodeBlock language="markdown" editable>
+
 # YouTubeMind 🎥
 
+### Chat With Any YouTube Video Using AI
 
-An AI-powered application that allows users to
-interact with YouTube videos through natural
+YouTubeMind is an AI-powered application that allows
+users to interact with YouTube videos through natural
 language conversations.
-Features
+
+## Features
+
 - YouTube transcript extraction
 - Retrieval-Augmented Generation (RAG)
 - Semantic search using embeddings
@@ -13,7 +16,9 @@ Features
 - Conversational AI using LangChain
 - Context-aware question answering
 - Timestamp-based answers
-Tech Stack
+
+## Tech Stack
+
 - Python
 - LangChain
 - HuggingFace
@@ -21,11 +26,19 @@ Tech Stack
 - Gemini / Groq
 - FastAPI
 - Streamlit
-Project Status
+
+## Project Architecture
+
+YouTube URL → Transcript Extraction → Text Chunking
+→ Embeddings → FAISS → Retriever → LLM → Answer
+
+## Project Status
+
 Currently under development.
-Future Enhancements
+
+## Future Enhancements
+
 - Automatic MCQ generation
 - Video summarization
 - Multilingual question answering
 - Clickable video timestamps
-  </CodeBlock>
