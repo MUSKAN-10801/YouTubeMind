@@ -4,17 +4,9 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
 def clean_text(text: str) -> str:
-    """
-    Clean unnecessary whitespace and formatting from transcript text.
-    """
-
-    # Remove extra spaces and newlines
+    """Clean unnecessary whitespace from transcript text."""
     text = re.sub(r"\s+", " ", text)
-
-    # Remove leading and trailing spaces
-    text = text.strip()
-
-    return text
+    return text.strip()
 
 
 def process_transcript(
@@ -23,98 +15,91 @@ def process_transcript(
     chunk_overlap: int = 200
 ) -> list:
     """
-    Clean transcript segments and divide them into chunks.
-    Preserve timestamps for every chunk.
+    Clean transcript, create overlapping chunks,
+    and preserve their approximate video timestamps.
     """
 
     if not segments:
         raise ValueError("Transcript is empty.")
 
-    # Clean individual transcript segments
-    cleaned_segments = []
+    if chunk_size <= 0:
+        raise ValueError("Chunk size must be positive.")
 
+    if chunk_overlap < 0 or chunk_overlap >= chunk_size:
+        raise ValueError(
+            "Chunk overlap must be non-negative and smaller than chunk size."
+        )
+
+    cleaned_segments = []
+    full_text_parts = []
+    current_position = 0
+
+    # Step 1: Clean text and track character positions
     for segment in segments:
         text = clean_text(segment["text"])
 
         if not text:
             continue
 
+        if full_text_parts:
+            current_position += 1  # Space between segments
+
+        char_start = current_position
+        char_end = char_start + len(text)
+
+        start_time = float(segment["start"])
+        end_time = start_time + float(segment["duration"])
+
         cleaned_segments.append({
             "text": text,
-            "start": float(segment["start"]),
-            "end": float(segment["start"]) + float(segment["duration"])
+            "start": start_time,
+            "end": end_time,
+            "char_start": char_start,
+            "char_end": char_end
         })
 
-    # Combine transcript segments while retaining their time boundaries
-    full_text = " ".join(
-        segment["text"] for segment in cleaned_segments
-    )
+        full_text_parts.append(text)
+        current_position = char_end
 
+    if not cleaned_segments:
+        raise ValueError("No usable transcript text found.")
+
+    full_text = " ".join(full_text_parts)
+
+    # Step 2: Create overlapping text chunks
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
-        separators=["\n\n", "\n", "। ", ". ", " ", ""]
+        separators=["\n\n", "\n", "। ", ". ", " ", ""],
+        add_start_index=True
     )
 
-    text_chunks = splitter.split_text(full_text)
+    documents = splitter.create_documents([full_text])
 
-    # Match each chunk to its approximate timestamp range
+    # Step 3: Match chunks with original transcript timestamps
     chunks = []
-    search_position = 0
 
-    for index, chunk_text in enumerate(text_chunks):
+    for index, document in enumerate(documents):
+        chunk_text = document.page_content
+        chunk_start = document.metadata["start_index"]
+        chunk_end = chunk_start + len(chunk_text)
 
-        chunk_start_position = full_text.find(
-            chunk_text,
-            max(0, search_position - chunk_overlap)
-        )
-
-        if chunk_start_position == -1:
-            chunk_start_position = search_position
-
-        chunk_end_position = chunk_start_position + len(chunk_text)
-
-        overlapping_segments = [
+        matched_segments = [
             segment for segment in cleaned_segments
             if (
-                segment["end"] >= 0
-                and segment["start"] >= 0
+                segment["char_start"] < chunk_end
+                and segment["char_end"] > chunk_start
             )
         ]
 
-        # Find transcript segments overlapping this chunk's text
-        current_position = 0
-        matched_segments = []
-
-        for segment in overlapping_segments:
-            segment_start = current_position
-            segment_end = current_position + len(segment["text"])
-
-            if (
-                segment_end >= chunk_start_position
-                and segment_start <= chunk_end_position
-            ):
-                matched_segments.append(segment)
-
-            current_position = segment_end + 1
-
-        start_time = (
-            matched_segments[0]["start"]
-            if matched_segments else 0.0
-        )
-
-        end_time = (
-            matched_segments[-1]["end"]
-            if matched_segments else 0.0
-        )
+        if not matched_segments:
+            continue
 
         chunks.append({
             "chunk_id": index,
             "text": chunk_text,
-            "start_time": start_time,
-            "end_time": end_time
+            "start_time": matched_segments[0]["start"],
+            "end_time": matched_segments[-1]["end"]
         })
-
-        search_position = chunk_start_position + len(chunk_text)
 
     return chunks
