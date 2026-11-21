@@ -10,3 +10,4 @@ uvicorn
 faiss-cpu
 sentence-transformers
 langchain-text-splitters
+sentence-transformers
